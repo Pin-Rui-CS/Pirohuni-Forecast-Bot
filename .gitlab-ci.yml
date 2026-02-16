@@ -21,11 +21,13 @@ forecast_job:
     - poetry run python forecasting_bot.py --mode tournament --tournament "spring-2026-ai minibench"
 
   rules:
-    # allow manual run from UI
+    # Run if triggered manually
     - if: '$CI_PIPELINE_SOURCE == "web"'
       when: on_success
-    # allow scheduled pipelines
+
+    # Run if triggered by schedule
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: on_success
-    # otherwise don't run automatically on pushes (optional)
+
+    # Otherwise do not run (prevents running on every push)
     - when: never
