@@ -1,60 +1,31 @@
-name: Forecast on new AI tournament questions
+stages:
+  - forecast
 
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: "*/20 * * * *" # runs every 20 minutes. Make sure to skip already forecasted questions!
+forecast_job:
+  stage: forecast
+  image: python:3.11-slim
 
-# Add concurrency group to prevent parallel runs
-concurrency:
-  group: ${{ github.workflow }}
-  cancel-in-progress: false
-  
-# Daily job to run the simple forecast bot
-# Daily job to run the simple forecast bot
-jobs:
-  forecast_job:
-    runs-on: ubuntu-latest
+  cache:
+    key: "$CI_COMMIT_REF_SLUG"
+    paths:
+      - .venv/
+      - .cache/pypoetry/
 
-    steps:
-      # Checkout repo
-      - name: Check out repository
-        uses: actions/checkout@v3
+  before_script:
+    - python --version
+    - pip install --no-cache-dir poetry
+    - poetry config virtualenvs.in-project true
 
-      # Setup Python
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
+  script:
+    - poetry install --no-interaction --no-root
+    - poetry run python forecasting_bot.py --mode tournament --tournament "spring-2026-ai minibench"
 
-      # Install Poetry
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          installer-parallel: true
-
-      # (Optional but recommended) Cache the virtualenv
-      - name: Load cached venv
-        uses: actions/cache@v4
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
-
-      # Install dependencies
-      - name: Install dependencies
-        run: poetry install --no-interaction --no-root
-
-      # Run the bot
-      - name: Run bot
-        run: poetry run python forecasting_bot.py --mode tournament --tournament spring-2026-ai minibench
-        env:
-          METACULUS_TOKEN: ${{ secrets.METACULUS_TOKEN }}
-          PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
-          EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          ASKNEWS_CLIENT_ID: ${{ secrets.ASKNEWS_CLIENT_ID }}
-          ASKNEWS_SECRET: ${{ secrets.ASKNEWS_SECRET }}
+  rules:
+    # allow manual run from UI
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: on_success
+    # allow scheduled pipelines
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: on_success
+    # otherwise don't run automatically on pushes (optional)
+    - when: never
