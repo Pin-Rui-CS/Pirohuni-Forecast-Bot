@@ -18,7 +18,7 @@ forecast_job:
 
   script:
     - poetry install --no-interaction --no-root
-    - poetry run python forecasting_bot.py --mode tournament --tournament "spring-2026-ai minibench"
+    - poetry run python forecasting_bot.py --mode tournament --tournament spring-2026-ai minibench
 
   rules:
     # Run if triggered manually
