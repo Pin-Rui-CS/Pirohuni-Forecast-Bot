@@ -27,7 +27,7 @@ USE_EXAMPLE_QUESTIONS = False  # set to True to forecast example questions rathe
 NUM_RUNS_PER_QUESTION = (
     5  # The median forecast is taken between NUM_RUNS_PER_QUESTION runs
 )
-SKIP_PREVIOUSLY_FORECASTED_QUESTIONS = True
+SKIP_PREVIOUSLY_FORECASTED_QUESTIONS = False
 METACULUS_API_RATE_LIMITER = asyncio.Semaphore(3)
 METACULUS_REQUEST_INTERVAL = float(os.getenv("METACULUS_REQUEST_INTERVAL", "3.0"))
 
