@@ -33,22 +33,22 @@ def print_section(title: str):
 
 def print_success(message: str):
     """Print a success message."""
-    print(f"{Colors.OKGREEN}✓ {message}{Colors.ENDC}")
+    print(f"{Colors.OKGREEN}[OK] {message}{Colors.ENDC}")
 
 
 def print_error(message: str):
     """Print an error message."""
-    print(f"{Colors.FAIL}✗ {message}{Colors.ENDC}")
+    print(f"{Colors.FAIL}[ERR] {message}{Colors.ENDC}")
 
 
 def print_warning(message: str):
     """Print a warning message."""
-    print(f"{Colors.WARNING}⚠ {message}{Colors.ENDC}")
+    print(f"{Colors.WARNING}[WARN] {message}{Colors.ENDC}")
 
 
 def print_info(message: str):
     """Print an info message."""
-    print(f"{Colors.OKCYAN}ℹ {message}{Colors.ENDC}")
+    print(f"{Colors.OKCYAN}[INFO] {message}{Colors.ENDC}")
 
 
 def test_environment_variables():
@@ -91,7 +91,7 @@ def test_environment_variables():
             print_warning(f"{var} not set ({description})")
     
     if not research_keys_available:
-        print_warning("\n⚠ No research API keys found. Bot will run with 'No research done'")
+        print_warning("\nNo research API keys found. Bot will run with 'No research done'")
     
     return all_required_set
 
@@ -323,12 +323,114 @@ async def test_tournament_questions():
         return False
 
 
+async def test_resolution_scraper():
+    """Test resolution scraper extraction, adapter wiring, and scrape flow."""
+    print_section("Testing Resolution Scraper")
+
+    try:
+        from resolution_scraper import (
+            ResolutionScraper,
+            ScraperConfig,
+            format_resolution_snapshot,
+            format_scrape_errors,
+        )
+        from resolution_scraper.extraction import classify_url, extract_resolution_urls
+    except Exception as e:
+        print_error(f"Failed importing resolution scraper modules: {str(e)}")
+        traceback.print_exc()
+        return False
+
+    try:
+        # Test 1: URL extraction and classification
+        print_info("Test 1: URL extraction/classification...")
+        criteria = (
+            "Resolve from [Wikipedia](https://en.wikipedia.org/wiki/Wikipedia). "
+            "Backup source: https://en.wikipedia.org/wiki/Wikipedia."
+        )
+        fine_print = "JSON source: https://api.github.com/repos/python/cpython."
+        description = "CSV source (example): https://people.sc.fsu.edu/~jburkardt/data/csv/airtravel.csv"
+
+        urls = extract_resolution_urls(criteria, fine_print, description)
+        print_info(f"Extracted URLs ({len(urls)}): {urls}")
+        if not urls:
+            print_error("No URLs extracted by extract_resolution_urls()")
+            return False
+
+        url_types = {url: classify_url(url) for url in urls}
+        print_info(f"Classified URL types: {url_types}")
+        print_success("URL extraction/classification works")
+
+        # Test 2: Scraper initialization and adapter setup
+        print_info("\nTest 2: Scraper initialization...")
+        scraper = ResolutionScraper(
+            ScraperConfig(
+                use_browser_fallback=False,
+                max_parallel_fetches=2,
+                max_retries=1,
+                request_timeout_s=12.0,
+            )
+        )
+        adapter_names = [adapter.name for adapter in scraper.adapters]
+        print_info(f"Loaded adapters: {adapter_names}")
+        if len(adapter_names) < 3:
+            print_error("Expected multiple adapters, but found too few")
+            return False
+        print_success("ResolutionScraper initialized correctly")
+
+        # Test 3: End-to-end scrape flow on synthetic question details
+        print_info("\nTest 3: End-to-end scrape flow...")
+        question_details = {
+            "id": 999999,
+            "title": "Resolution scraper health check",
+            "type": "numeric",
+            "scheduled_resolve_time": None,
+            "resolution_criteria": criteria,
+            "fine_print": fine_print,
+            "description": description,
+        }
+
+        results = await scraper.scrape_question_sources(question_details)
+        print_info(f"Scrape results count: {len(results)}")
+        if not isinstance(results, list):
+            print_error("scrape_question_sources() did not return a list")
+            return False
+
+        signals = scraper.flatten_signals(results)
+        snapshot = format_resolution_snapshot(signals)
+        scrape_errors = format_scrape_errors(results)
+
+        print_info(f"Signals extracted: {len(signals)}")
+        print_info(f"Snapshot preview: {snapshot[:300]}")
+        if scrape_errors:
+            print_warning(f"Scrape errors (if any): {scrape_errors[:300]}")
+
+        # Consider scraper healthy if pipeline executes and returns either signals
+        # or meaningful structured errors.
+        if signals:
+            print_success("Resolution scraper extracted structured signals")
+            return True
+
+        if results and all(hasattr(r, "ok") for r in results):
+            print_warning(
+                "No signals extracted, but scraper pipeline executed with structured results."
+            )
+            return True
+
+        print_error("Resolution scraper pipeline did not return expected structured output")
+        return False
+
+    except Exception as e:
+        print_error(f"Error testing resolution scraper: {str(e)}")
+        traceback.print_exc()
+        return False
+
+
 async def run_all_tests():
     """Run all tests and provide a summary."""
     print(f"\n{Colors.BOLD}{Colors.HEADER}")
-    print("╔════════════════════════════════════════════════════════════════════════════════╗")
-    print("║         METACULUS FORECASTING BOT - COMPREHENSIVE TEST SUITE                  ║")
-    print("╚════════════════════════════════════════════════════════════════════════════════╝")
+    print("+" + "=" * 78 + "+")
+    print("|         METACULUS FORECASTING BOT - COMPREHENSIVE TEST SUITE                  |")
+    print("+" + "=" * 78 + "+")
     print(f"{Colors.ENDC}\n")
     
     results = {}
@@ -339,6 +441,7 @@ async def run_all_tests():
     results["Async API Functions"] = await test_async_api_functions()
     results["LLM Connection"] = await test_llm_connection()
     results["Tournament Questions"] = await test_tournament_questions()
+    results["Resolution Scraper"] = await test_resolution_scraper()
     
     # Print summary
     print_section("TEST SUMMARY")
@@ -355,16 +458,16 @@ async def run_all_tests():
     print(f"\n{Colors.BOLD}Overall: {passed}/{total} tests passed{Colors.ENDC}")
     
     if passed == total:
-        print(f"\n{Colors.OKGREEN}{Colors.BOLD}🎉 All tests passed! Your forecasting bot is ready to use.{Colors.ENDC}")
+        print(f"\n{Colors.OKGREEN}{Colors.BOLD}All tests passed! Your forecasting bot is ready to use.{Colors.ENDC}")
         print_info("\nNext steps:")
         print_info("  1. Run: python forecasting_bot.py --mode examples --no-submit")
         print_info("  2. Check the outputs to verify everything works")
         print_info("  3. Run: python forecasting_bot.py --mode tournament")
     elif passed >= 3:
-        print(f"\n{Colors.OKGREEN}{Colors.BOLD}✓ Core functionality working. Some optional features failed.{Colors.ENDC}")
+        print(f"\n{Colors.OKGREEN}{Colors.BOLD}Core functionality working. Some optional features failed.{Colors.ENDC}")
         print_info("\nYou can proceed with caution. Check failed tests above.")
     else:
-        print(f"\n{Colors.FAIL}{Colors.BOLD}✗ Critical tests failed. Please fix the errors above.{Colors.ENDC}")
+        print(f"\n{Colors.FAIL}{Colors.BOLD}Critical tests failed. Please fix the errors above.{Colors.ENDC}")
         print_info("\nCommon issues:")
         print_info("  1. Missing METACULUS_TOKEN or OPENROUTER_API_KEY in .env file")
         print_info("  2. Invalid API keys")
@@ -385,3 +488,4 @@ if __name__ == "__main__":
         print(f"\n{Colors.FAIL}Unexpected error: {str(e)}{Colors.ENDC}")
         traceback.print_exc()
         sys.exit(1)
+

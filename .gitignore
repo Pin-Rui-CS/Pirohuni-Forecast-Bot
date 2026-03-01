@@ -20,3 +20,9 @@ forecast_types/
 input_questions/
 question_types/
 test_results/
+
+# Local files/folders to keep out of commits
+docs/
+forecast_custom_question.py
+inspect_bot.py
+test.py
